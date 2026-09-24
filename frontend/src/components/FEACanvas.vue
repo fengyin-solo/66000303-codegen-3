@@ -71,13 +71,51 @@ function draw() {
     const [x2, y2] = toScreen(n2.x, n2.y);
     const color = store.elementColors.get(el.id) || '#6b7280';
     const isSelected = store.selectedElement === el.id;
+    const hl = store.elementHighlight.get(el.id);
+    const isHoveredRow = store.hoveredAlarmElement === el.id;
 
-    ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.lineTo(x2, y2);
-    ctx.strokeStyle = color;
-    ctx.lineWidth = isSelected ? 4 : 2.5;
-    ctx.stroke();
+    // 告警构件：用分级颜色加粗覆盖热力图颜色（已确认的画虚线降权）
+    if (hl) {
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.strokeStyle = hl.color;
+      ctx.lineWidth = isSelected || isHoveredRow ? 6 : 4.5;
+      if (hl.acknowledged) ctx.setLineDash([7, 4]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    } else {
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = isSelected || isHoveredRow ? 4 : 2.5;
+      ctx.stroke();
+    }
+
+    // 无法比较（材料缺失）的构件：紫色点划线提示
+    if (!hl && store.incomparableMap.has(el.id)) {
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.strokeStyle = 'rgba(192,132,252,0.9)';
+      ctx.lineWidth = 3;
+      ctx.setLineDash([2, 4]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // 列表悬停联动：白色光环定位
+    if (isHoveredRow) {
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([3, 3]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
 
     if (isSelected) {
       ctx.strokeStyle = '#ffffff';
@@ -343,6 +381,10 @@ watch(
     store.selectedElement,
     store.heatmapMode,
     store.elementColors,
+    store.elementHighlight,
+    store.hoveredAlarmElement,
+    store.incomparableMap,
+    store.batchIgnored,
   ],
   () => nextTick(draw),
   { deep: true }

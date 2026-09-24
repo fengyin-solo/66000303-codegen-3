@@ -3,6 +3,7 @@ import { onMounted } from 'vue';
 import FEACanvas from './components/FEACanvas.vue';
 import ElementInfo from './components/ElementInfo.vue';
 import MeshControls from './components/MeshControls.vue';
+import AlarmPanel from './components/AlarmPanel.vue';
 import { useFEAStore } from './store/fea';
 
 const store = useFEAStore();
@@ -33,7 +34,8 @@ onMounted(() => {
       </div>
 
       <!-- Right sidebar -->
-      <div class="w-[25%] min-w-[260px] bg-slate-900 border-l border-slate-800 p-3 flex flex-col gap-3 overflow-y-auto">
+      <div class="w-[28%] min-w-[300px] bg-slate-900 border-l border-slate-800 p-3 flex flex-col gap-3 overflow-y-auto">
+        <AlarmPanel />
         <MeshControls />
         <ElementInfo />
       </div>
@@ -58,6 +60,22 @@ onMounted(() => {
       </span>
       <span>
         单元数: <span class="text-slate-200">{{ store.model.elements.length }}</span>
+      </span>
+      <span
+        v-if="store.alarmsChecked"
+        class="flex items-center gap-1"
+        :class="store.activeAlarmCount > 0 ? 'text-red-400' : 'text-emerald-400'"
+      >
+        超限告警:
+        <span class="font-bold">
+          {{ store.batchIgnored ? '已忽略' : store.activeAlarmCount }}
+        </span>
+        <span v-if="store.activeAlarmCount > 0" class="text-slate-500">
+          ({{ store.levelCounts[3] }} 三级 / {{ store.levelCounts[2] }} 二级 / {{ store.levelCounts[1] }} 一级)
+        </span>
+        <span v-if="store.incomparableElements.length > 0" class="text-purple-400">
+          · {{ store.incomparableElements.length }} 根缺材料参数
+        </span>
       </span>
       <span class="ml-auto text-slate-600">
         热力图: {{ store.heatmapMode }}

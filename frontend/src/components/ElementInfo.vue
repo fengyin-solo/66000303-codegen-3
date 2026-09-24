@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useFEAStore } from '../store/fea';
+import { ALARM_LEVEL_META } from '../utils/stress-alarm';
 
 const store = useFEAStore();
 
@@ -37,6 +38,45 @@ const color = computed(() => {
   if (store.selectedElement === null) return '#6b7280';
   return store.elementColors.get(store.selectedElement) || '#6b7280';
 });
+
+// 该构件当前的告警（若有）
+const alarm = computed(() =>
+  selectedEl.value ? store.alarmMap.get(selectedEl.value.id) ?? null : null
+);
+
+const incomparable = computed(() =>
+  selectedEl.value ? store.incomparableMap.get(selectedEl.value.id) ?? null : null
+);
+
+// 许用应力输入值（MPa），空串表示缺失
+const allowableInput = ref('');
+
+function syncInput() {
+  const v = selectedEl.value?.allowableStress;
+  allowableInput.value = v !== undefined && v !== null && v > 0 ? String(v / 1e6) : '';
+}
+
+watch(selectedEl, syncInput, { immediate: true });
+
+function commitAllowable() {
+  if (!selectedEl.value) return;
+  const raw = allowableInput.value.trim();
+  if (raw === '') {
+    store.setElementAllowable(selectedEl.value.id, null);
+  } else {
+    const mpa = Number(raw);
+    if (Number.isFinite(mpa) && mpa > 0) {
+      store.setElementAllowable(selectedEl.value.id, mpa * 1e6);
+    }
+  }
+}
+
+const allowableInvalid = computed(() => {
+  const raw = allowableInput.value.trim();
+  if (raw === '') return false;
+  const mpa = Number(raw);
+  return !Number.isFinite(mpa) || mpa <= 0;
+});
 </script>
 
 <template>
@@ -54,6 +94,21 @@ const color = computed(() => {
       <div class="flex items-center gap-2 mb-3">
         <div class="w-4 h-4 rounded" :style="{ backgroundColor: color }" />
         <span class="text-slate-300 font-medium">单元 #{{ selectedEl.id }}</span>
+        <!-- 告警徽标：与告警列表、画布同源 -->
+        <span
+          v-if="alarm"
+          class="ml-auto text-[10px] px-1.5 py-0.5 rounded border font-bold"
+          :class="ALARM_LEVEL_META[alarm.level].chip"
+        >
+          {{ ALARM_LEVEL_META[alarm.level].short }} 超限 {{ alarm.overPercent.toFixed(1) }}%
+          {{ alarm.acknowledged ? '· 已确认' : '' }}
+        </span>
+        <span
+          v-else-if="incomparable"
+          class="ml-auto text-[10px] px-1.5 py-0.5 rounded border border-purple-500/40 bg-purple-500/15 text-purple-300 font-bold"
+        >
+          无法比较
+        </span>
       </div>
 
       <div class="grid grid-cols-2 gap-2">
@@ -80,6 +135,32 @@ const color = computed(() => {
           <div class="text-sm font-mono text-slate-200">
             {{ (selectedEl.youngsModulus / 1e9).toFixed(0) }} GPa
           </div>
+        </div>
+      </div>
+
+      <!-- 许用应力（材料参数，用于超限比对） -->
+      <div class="bg-slate-900 rounded p-2">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-slate-400">许用应力 [σ]</span>
+          <span v-if="incomparable" class="text-[10px] text-purple-300">
+            {{ incomparable.reason }}
+          </span>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <input
+            v-model="allowableInput"
+            @change="commitAllowable"
+            @blur="commitAllowable"
+            type="number"
+            min="0"
+            placeholder="未设置"
+            class="w-24 bg-slate-800 border rounded px-1.5 py-0.5 text-sm font-mono text-slate-200"
+            :class="allowableInvalid ? 'border-red-500' : 'border-slate-600'"
+          />
+          <span class="text-[10px] text-slate-500">MPa</span>
+          <span v-if="allowableInvalid" class="text-[10px] text-red-400 ml-auto">
+            需为大于 0 的数值
+          </span>
         </div>
       </div>
 

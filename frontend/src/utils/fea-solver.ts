@@ -196,7 +196,8 @@ export function buildTrussBeam(
   length: number,
   height: number,
   nDivX: number,
-  nDivY: number
+  nDivY: number,
+  allowableStress?: number  // 许用应力 (Pa)；不传则构件材料参数缺失
 ): FEAModel {
   const nodes: Node[] = [];
   const elements: Element[] = [];
@@ -234,6 +235,7 @@ export function buildTrussBeam(
           nodeIds: [nodeGrid[iy][ix], nodeGrid[iy][ix + 1]],
           area: A,
           youngsModulus: E,
+          allowableStress,
           stress: 0, strain: 0, force: 0,
         });
       }
@@ -244,6 +246,7 @@ export function buildTrussBeam(
           nodeIds: [nodeGrid[iy][ix], nodeGrid[iy + 1][ix]],
           area: A,
           youngsModulus: E,
+          allowableStress,
           stress: 0, strain: 0, force: 0,
         });
       }
@@ -255,6 +258,7 @@ export function buildTrussBeam(
             nodeIds: [nodeGrid[iy][ix], nodeGrid[iy + 1][ix + 1]],
             area: A * 0.7,
             youngsModulus: E,
+            allowableStress,
             stress: 0, strain: 0, force: 0,
           });
         } else {
@@ -263,6 +267,7 @@ export function buildTrussBeam(
             nodeIds: [nodeGrid[iy][ix + 1], nodeGrid[iy + 1][ix]],
             area: A * 0.7,
             youngsModulus: E,
+            allowableStress,
             stress: 0, strain: 0, force: 0,
           });
         }
@@ -276,9 +281,10 @@ export function buildTrussBeam(
 export function buildCantileverBeam(
   length: number,
   height: number,
-  nElements: number
+  nElements: number,
+  allowableStress?: number
 ): FEAModel {
-  const model = buildTrussBeam(length, height, nElements, 2);
+  const model = buildTrussBeam(length, height, nElements, 2, allowableStress);
   const N = model.nodes.length;
   // Apply downward load at right end
   const rightTopNode = model.nodes.find(
@@ -299,9 +305,10 @@ export function buildCantileverBeam(
 export function buildBridgeTruss(
   span: number,
   height: number,
-  nPanels: number
+  nPanels: number,
+  allowableStress?: number
 ): FEAModel {
-  const model = buildTrussBeam(span, height, nPanels, 1);
+  const model = buildTrussBeam(span, height, nPanels, 1, allowableStress);
   // Simply supported: fix left bottom (pin), right bottom (roller - only y fixed)
   for (const node of model.nodes) {
     node.fixed = false;
@@ -329,9 +336,13 @@ export function buildBridgeTruss(
 }
 
 // ─── Preset Models ──────────────────────────────────────────────────────────
-export const presetCantileverBeam = (): FEAModel => buildCantileverBeam(4, 1, 8);
-export const presetBridgeTruss = (): FEAModel => buildBridgeTruss(10, 2, 10);
+// 许用应力取值仅用于演示应力超限告警的三级分布
+export const presetCantileverBeam = (): FEAModel =>
+  buildCantileverBeam(4, 1, 8, 45e6);               // [σ]=45MPa：含三级与一级超限
+export const presetBridgeTruss = (): FEAModel =>
+  buildBridgeTruss(10, 2, 10, 35e6);                // [σ]=35MPa：含二级与一级超限
 export const presetSimpleFrame = (): FEAModel => {
+  // 刻意不传入许用应力：用于演示“材料参数缺失、无法比较”的空态分支
   const model = buildTrussBeam(3, 3, 4, 4);
   // Fix bottom row
   for (const node of model.nodes) {
