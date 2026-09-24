@@ -71,6 +71,19 @@ function draw() {
     const [x2, y2] = toScreen(n2.x, n2.y);
     const color = store.elementColors.get(el.id) || '#6b7280';
     const isSelected = store.selectedElement === el.id;
+    const alert = store.activeAlertByElement.get(el.id);
+
+    // 待处理应力告警：先画一级别色光晕底层，热力图线条叠在上面
+    if (alert) {
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.strokeStyle = store.levelColor(alert.level);
+      ctx.globalAlpha = 0.85;
+      ctx.lineWidth = 7;
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
 
     ctx.beginPath();
     ctx.moveTo(x1, y1);
@@ -88,6 +101,26 @@ function draw() {
       ctx.lineTo(x2, y2);
       ctx.stroke();
       ctx.setLineDash([]);
+    }
+
+    // 告警级别徽章（构件中点），与告警列表条目对应
+    if (alert) {
+      const mx = (x1 + x2) / 2;
+      const my = (y1 + y2) / 2;
+      const levelColor = store.levelColor(alert.level);
+      ctx.beginPath();
+      ctx.arc(mx, my, 8, 0, Math.PI * 2);
+      ctx.fillStyle = levelColor;
+      ctx.fill();
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.fillStyle = '#0f172a';
+      ctx.font = 'bold 10px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(alert.level === 1 ? 'Ⅰ' : alert.level === 2 ? 'Ⅱ' : 'Ⅲ', mx, my + 0.5);
+      ctx.textBaseline = 'alphabetic';
     }
   }
 
@@ -343,6 +376,8 @@ watch(
     store.selectedElement,
     store.heatmapMode,
     store.elementColors,
+    store.alerts,
+    store.activeAlertByElement,
   ],
   () => nextTick(draw),
   { deep: true }

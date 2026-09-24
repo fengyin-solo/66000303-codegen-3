@@ -329,8 +329,55 @@ export function buildBridgeTruss(
 }
 
 // ─── Preset Models ──────────────────────────────────────────────────────────
-export const presetCantileverBeam = (): FEAModel => buildCantileverBeam(4, 1, 8);
-export const presetBridgeTruss = (): FEAModel => buildBridgeTruss(10, 2, 10);
+/**
+ * 为构件赋予许用应力 [σ]（Pa）。
+ * 悬臂梁按杆件几何位置分组赋不同材料许用值，使三级超限与“材料缺失”场景都能呈现：
+ *   弦杆应力档位 70/50/30/10 MPa → [σ]=40/40/27/60 MPa，前两档落在 Ⅲ/Ⅱ/Ⅰ 级
+ *   斜杆 20.2 MPa → [σ]=18 MPa（1.12× Ⅰ级）；竖腹杆零应力 → [σ]=60 MPa
+ *   自由端顶部那段 10 MPa 弦杆刻意不赋许用应力，模拟材料参数缺失；
+ *   补全许用值后即可看到它在“无法校核”与告警列表之间迁移
+ */
+function assignCantileverAllowables(model: FEAModel) {
+  const { nodes, elements } = model;
+  const nodeById = new Map(nodes.map((n) => [n.id, n]));
+  for (const el of elements) {
+    const n1 = nodeById.get(el.nodeIds[0])!;
+    const n2 = nodeById.get(el.nodeIds[1])!;
+    const dx = n2.x - n1.x;
+    const dy = n2.y - n1.y;
+
+    if (Math.abs(dx) < 1e-9) {
+      // 竖腹杆（本模型中均为零力杆）
+      el.allowableStress = 60e6;
+    } else if (Math.abs(dy) > 1e-9) {
+      // 斜杆
+      el.allowableStress = 18e6;
+    } else {
+      // 水平弦杆：按跨中位置分组
+      const xMid = (n1.x + n2.x) / 2;
+      if (xMid < 1) el.allowableStress = 40e6;        // 70 MPa → 1.75× Ⅲ级
+      else if (xMid < 2) el.allowableStress = 40e6;   // 50 MPa → 1.25× Ⅱ级
+      else if (xMid < 3) el.allowableStress = 27e6;   // 30 MPa → 1.11× Ⅰ级
+      else if (n1.y === 1 && xMid > 3.5) {
+        // 自由端顶部 10 MPa 弦杆：材料许用应力未录入
+      } else el.allowableStress = 60e6;               // 10 MPa 及其余零应力杆，安全
+    }
+  }
+}
+
+export const presetCantileverBeam = (): FEAModel => {
+  const model = buildCantileverBeam(4, 1, 8);
+  assignCantileverAllowables(model);
+  return model;
+};
+
+export const presetBridgeTruss = (): FEAModel => {
+  const model = buildBridgeTruss(10, 2, 10);
+  // Q345 钢：最大应力 50 MPa < [σ]=55 MPa，全部安全，用于演示空态
+  for (const el of model.elements) el.allowableStress = 55e6;
+  return model;
+};
+
 export const presetSimpleFrame = (): FEAModel => {
   const model = buildTrussBeam(3, 3, 4, 4);
   // Fix bottom row
@@ -346,6 +393,7 @@ export const presetSimpleFrame = (): FEAModel => {
   if (topCenter) {
     model.loads.push({ nodeId: topCenter.id, fx: 5000, fy: -20000 });
   }
+  // 材料许用应力全部未录入，用于演示“无法比较”单列场景
   return model;
 };
 

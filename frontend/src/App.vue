@@ -3,6 +3,7 @@ import { onMounted } from 'vue';
 import FEACanvas from './components/FEACanvas.vue';
 import ElementInfo from './components/ElementInfo.vue';
 import MeshControls from './components/MeshControls.vue';
+import StressAlerts from './components/StressAlerts.vue';
 import { useFEAStore } from './store/fea';
 
 const store = useFEAStore();
@@ -35,6 +36,7 @@ onMounted(() => {
       <!-- Right sidebar -->
       <div class="w-[25%] min-w-[260px] bg-slate-900 border-l border-slate-800 p-3 flex flex-col gap-3 overflow-y-auto">
         <MeshControls />
+        <StressAlerts />
         <ElementInfo />
       </div>
     </div>
@@ -51,6 +53,17 @@ onMounted(() => {
         最大位移:
         <span class="text-amber-400 font-bold">
           {{ store.result ? (store.maxDisplacement * 1000).toFixed(3) + ' mm' : '—' }}
+        </span>
+      </span>
+      <span v-if="store.checked">
+        超限构件:
+        <span
+          :class="store.pendingAlerts.length > 0 ? 'text-red-400 font-bold' : 'text-emerald-400'"
+        >
+          {{ store.pendingAlerts.length > 0 ? store.pendingAlerts.length + ' 根待处理' : '无' }}
+        </span>
+        <span v-if="store.incomparableElements.length > 0" class="text-sky-400">
+          （{{ store.incomparableElements.length }} 根缺材料参数）
         </span>
       </span>
       <span>

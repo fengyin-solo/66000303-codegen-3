@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useFEAStore } from '../store/fea';
+import { LEVEL_META } from '../utils/stress-alerts';
 
 const store = useFEAStore();
 
@@ -37,6 +38,39 @@ const color = computed(() => {
   if (store.selectedElement === null) return '#6b7280';
   return store.elementColors.get(store.selectedElement) || '#6b7280';
 });
+
+// 许用应力（MPa 展示）：undefined / <=0 视为材料参数缺失
+const hasAllowable = computed(
+  () =>
+    selectedEl.value !== null &&
+    typeof selectedEl.value.allowableStress === 'number' &&
+    selectedEl.value.allowableStress > 0
+);
+
+const allowableMPa = computed({
+  get: () => (hasAllowable.value ? (selectedEl.value!.allowableStress as number) / 1e6 : null),
+  set: (v: number | null) => {
+    if (!selectedEl.value) return;
+    selectedEl.value.allowableStress = v !== null && v > 0 ? v * 1e6 : undefined;
+    store.recheckAlerts();
+  },
+});
+
+function onAllowableInput(e: Event) {
+  const raw = (e.target as HTMLInputElement).value.trim();
+  allowableMPa.value = raw === '' || Number.isNaN(Number(raw)) ? null : Number(raw);
+}
+
+// 该构件当前的告警 / 无法比较原因
+const alert = computed(() =>
+  selectedEl.value ? store.alerts.find((a) => a.elementId === selectedEl.value!.id) ?? null : null
+);
+
+const incomparable = computed(() =>
+  selectedEl.value
+    ? store.incomparableElements.find((e) => e.elementId === selectedEl.value!.id) ?? null
+    : null
+);
 </script>
 
 <template>
@@ -54,6 +88,23 @@ const color = computed(() => {
       <div class="flex items-center gap-2 mb-3">
         <div class="w-4 h-4 rounded" :style="{ backgroundColor: color }" />
         <span class="text-slate-300 font-medium">单元 #{{ selectedEl.id }}</span>
+        <span
+          v-if="alert"
+          class="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded border"
+          :style="{
+            color: LEVEL_META[alert.level].color,
+            borderColor: LEVEL_META[alert.level].color + '80',
+          }"
+        >
+          {{ LEVEL_META[alert.level].short }} {{ alert.ratio.toFixed(2) }}×
+          {{ alert.status === 'acknowledged' ? '· 已确认' : alert.status === 'ignored' ? '· 已忽略' : '' }}
+        </span>
+        <span
+          v-else-if="incomparable"
+          class="ml-auto text-[10px] px-1.5 py-0.5 rounded border border-sky-700 text-sky-300"
+        >
+          缺材料参数
+        </span>
       </div>
 
       <div class="grid grid-cols-2 gap-2">
@@ -80,6 +131,36 @@ const color = computed(() => {
           <div class="text-sm font-mono text-slate-200">
             {{ (selectedEl.youngsModulus / 1e9).toFixed(0) }} GPa
           </div>
+        </div>
+      </div>
+
+      <!-- 许用应力（材料参数，参与超限校核） -->
+      <div class="bg-slate-900 rounded p-2">
+        <div class="flex items-center justify-between">
+          <div class="text-slate-400">许用应力 [σ]</div>
+          <span
+            v-if="!hasAllowable"
+            class="text-[10px] text-sky-400"
+          >缺失，无法校核</span>
+        </div>
+        <div class="flex items-center gap-1 mt-1">
+          <input
+            type="number"
+            min="0"
+            step="1"
+            :value="allowableMPa === null ? '' : allowableMPa"
+            @input="onAllowableInput"
+            placeholder="未设置"
+            class="w-24 bg-slate-800 border border-slate-700 rounded px-1.5 py-0.5 text-sm font-mono text-slate-200 focus:border-sky-600 focus:outline-none"
+          />
+          <span class="text-[10px] text-slate-500">MPa</span>
+          <span
+            v-if="alert"
+            class="ml-auto text-[10px] font-bold"
+            :style="{ color: LEVEL_META[alert.level].color }"
+          >
+            +{{ alert.overPercent.toFixed(0) }}%
+          </span>
         </div>
       </div>
 
